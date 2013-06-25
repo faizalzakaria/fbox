@@ -20,6 +20,19 @@ import os
 import sys
 import subprocess
 import yaml
+import re
+
+#############################################################################
+# Enum
+#############################################################################
+
+class Enum(set):
+    def __getattr__(self, name):
+        if name in self:
+            return name
+        raise AttributeError
+
+FBOXSTATUS = Enum(['STOPPED', 'RUNNING'])
 
 #############################################################################
 # global variables
@@ -36,12 +49,16 @@ fbox_name = ""
 archi = ""
 revision = ""
 
+DEBUG_TRACE = False
+
 ####################################################################
 # Colors
 ####################################################################
 
+magenta = "\033[35m"
+yellow = "\033[33m"
 green = "\033[32m"
-red  = "\033[35m"
+red  = "\033[31m"
 endc = "\033[0m"
 
 ####################################################################
@@ -55,7 +72,17 @@ def usage(argv):
     print("%s up      : To start lxc" % (argv[0]))
     print("%s halt    : To halt lxc" % (argv[0]))
     print("%s destroy : To destroy lxc" % (argv[0]))
+    print("%s status  : To get lxc status" % (argv[0]))
+    print("%s list    : To get lxc list" % (argv[0]))
     print("%s console : To go to lxc console" % (argv[0]))
+    print("-------------------------------------------------\n")
+
+def welcome():
+    print("\n-------------------------------------------------")
+    print("\tWelcome to %s box" % fbox_name)
+    print("\tDefault user     : ubuntu")
+    print("\tDefault password : ubuntu")
+    print("\t(ctr a-q to exit")
     print("-------------------------------------------------\n")
 
 ###########################################
@@ -63,49 +90,135 @@ def usage(argv):
 ###########################################
 
 def cmd_init():
-    print(sys._getframe().f_code.co_name)
+    trace(sys._getframe().f_code.co_name)
     f = open(fboxfile, 'w')
     f.write("#Auto generated file\n")
     f.write("#This will have all the fbox config\n")
     f.close()
 
 def cmd_up():
-    print(sys._getframe().f_code.co_name)
-
-    #############################################
-    ###### Check if its already created #########
-
+    trace(sys._getframe().f_code.co_name)
 
     #############################################
     ################ Create #####################
-    cmd = [ "sudo", "lxc-create", "-t", template, "-n", fbox_name, "--" ]
-    cmd.extend(['-a', archi, '-r', revision])
+    if not re.match(fbox_name, cmd_list(False)):
+        cmd = [ "sudo", "lxc-create", "-t", template, "-n", fbox_name, "--" ]
+        cmd.extend(['-a', archi, '-r', revision])
 
-    printc("executing command : %s" % ' '.join(cmd), green)
-    printc("Could take a while, please wait ...", green)
-    if execute(cmd, True) != 0:
-        printc("Failed to execute %s" % cmd, red)
+        info("executing command : %s" % ' '.join(cmd))
+        info("Could take a while, please wait ...")
+        if execute(cmd, True) != 0:
+            error("Failed to execute %s" % cmd)
 
     #############################################
     ################## Run ######################
-    
+    if cmd_status() == FBOXSTATUS.STOPPED:
+        int_cmd_run()
+
 def cmd_halt():
-    print(sys._getframe().f_code.co_name)
+    trace(sys._getframe().f_code.co_name)
+    if cmd_status() == FBOXSTATUS.RUNNING:
+        int_cmd_stop()
+        cmd_status()
 
 def cmd_destroy():
-    print(sys._getframe().f_code.co_name)
+    trace(sys._getframe().f_code.co_name)
+    cmd_halt()
+    int_cmd_destroy()
 
 def cmd_console():
-    print(sys._getframe().f_code.co_name)
+    trace(sys._getframe().f_code.co_name)
+    if cmd_status() != FBOXSTATUS.RUNNING:
+        error("You need to do fbox up first")
+        return 1
+    welcome()
+    int_cmd_console()
 
-def cmd_status():
-    cmd = [ "sudo", "lxc-ls", "|", "grep", "^$%s$" % fbox_name ]
-    if execute(cmd) != 0:
-        printc("Failed to execute %s" % cmd, red)
+def cmd_list(verbose=True):
+    trace(sys._getframe().f_code.co_name)
+    cmd = [ "sudo", "lxc-ls" ]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    ret = p.wait()
+    output = p.communicate()
+    if verbose:
+        printc(output[0], yellow)
+    return output[0]
+
+def cmd_status(verbose=True):
+    trace(sys._getframe().f_code.co_name)
+    cmd = [ "sudo", "lxc-info", "-n", fbox_name ]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    ret = p.wait()
+    output = p.communicate()
+    if re.match(".*STOPPED", output[0]):
+        if verbose:
+            info("\n%s is STOPPED\n" % fbox_name)
+        return FBOXSTATUS.STOPPED
+    elif re.match(".*RUNNING", output[0]):
+        if verbose:
+            info("\n%s is RUNNING\n" % fbox_name)
+        return FBOXSTATUS.RUNNING
+
+###########################################
+# Internal commands
+###########################################
+
+def int_cmd_run():
+    trace(sys._getframe().f_code.co_name)
+    cmd = [ "sudo", "lxc-start", "-n", fbox_name, "-d", "-c", "/var/run/lxc/%s.console" % fbox_name ]
+    log(' '.join(cmd))
+    if (execute(cmd) != 0):
+        error("Failed to execute cmd")
+        return 1
+    cmd = [ "sudo", "lxc-wait", "-n", fbox_name, "-s", "RUNNING" ]
+    log(' '.join(cmd))
+    execute(cmd)
+    if (execute(cmd) != 0):
+        error("Failed to execute cmd")
+        return 1
+    return 0
+
+def int_cmd_stop():
+    trace(sys._getframe().f_code.co_name)
+    cmd = [ "sudo", "lxc-stop", "-n", fbox_name ]
+    log(' '.join(cmd))
+    if (execute(cmd) != 0):
+        error("Failed to execute cmd")
+        return 1
+    cmd = [ "sudo", "lxc-wait", "-n", fbox_name, "-s", "STOPPED" ]
+    log(' '.join(cmd))
+    execute(cmd)
+    if (execute(cmd) != 0):
+        error("Failed to execute cmd")
+        return 1
+    return 0
+
+def int_cmd_destroy():
+    trace(sys._getframe().f_code.co_name)
+    cmd = [ "sudo", "lxc-destroy", "-n", fbox_name ]
+    log(' '.join(cmd))
+    if (execute(cmd) != 0):
+        error("Failed to execute cmd")
+        return 1
+    return 0
+
+def int_cmd_console():
+    trace(sys._getframe().f_code.co_name)
+    cmd = [ "sudo", "lxc-console", "-n", fbox_name ]
+    log(' '.join(cmd))
+    if (execute(cmd, True) != 0):
+        error("Failed to execute cmd")
+        return 1
+    return 0
+
 
 ###########################################
 # Helper
 ###########################################
+
+def trace(caller):
+    if DEBUG_TRACE:
+        printc("\t TRACE : " + caller, magenta)
 
 def load_config(configfile):
     with open(configfile, 'r') as getConfig:
@@ -126,18 +239,27 @@ def fboxfile_exist():
 def printc(msg, color):
     print(color + msg + endc)
 
+def log(msg):
+    printc(msg, green)
+
+def info(msg):
+    printc(msg, yellow)
+
+def error(msg):
+    printc(msg, red)
+
 def exec_cmd(cmd):
     if cmd in globals():
         if cmd != "cmd_init" and not fboxfile_exist():
-            printc("You need to run fbox init first", green)
+            error("You need to run fbox init first")
             return 1
         elif cmd == "cmd_init" and fboxfile_exist():
-            printc("fboxfile is not empty", green)
+            error("fboxfile is not empty")
             return 1
         globals()[cmd]()
         return 0
     else:
-        printc("fbox does not understand your command : %s" % cmd, green)
+        error("fbox does not understand your command : %s" % cmd)
         return 1
 
 def execute(cmd, verbose=False):
@@ -150,6 +272,7 @@ def execute(cmd, verbose=False):
             if out != '':
                 sys.stdout.write(out)
                 sys.stdout.flush()
+    ret = p.wait()
     output = p.communicate()
     return p.returncode
 
@@ -159,7 +282,7 @@ def execute(cmd, verbose=False):
 
 def main(argv=sys.argv):
 
-    print("fbox by %s" % author)
+    info("fbox by %s" % author)
 
     ###########################################
     # Check usage
