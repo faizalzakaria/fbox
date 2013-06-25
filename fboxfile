@@ -1,0 +1,9 @@
+#Container
+
+container:
+  name: sopbox
+  template: ubuntu
+  args:
+    archi: 'amd64'
+    revision: 'precise'
+
