@@ -32,22 +32,24 @@ class Enum(set):
             return name
         raise AttributeError
 
-FBOXSTATUS = Enum(['STOPPED', 'RUNNING'])
+FBOXSTATUS = Enum(['STOPPED', 'RUNNING', 'UNKNOWN'])
 
 #############################################################################
 # global variables
 #############################################################################
 
-author = "Faizal Zakaria"
+author        = "Faizal Zakaria"
 fbox_filename = "fboxfile"
-dir = {}
-dir['pwd'] = os.getcwd()
-fboxfile = os.path.join(dir['pwd'], fbox_filename)
+dir           = {}
+dir['pwd']    = os.getcwd()
+fboxfile      = os.path.join(dir['pwd'], fbox_filename)
+gateway       = "10.0.3.1"
 
-template = ""
+template  = ""
 fbox_name = ""
-archi = ""
-revision = ""
+archi     = ""
+revision  = ""
+mounts    = []
 
 DEBUG_TRACE = False
 
@@ -75,6 +77,8 @@ def usage(argv):
     print("%s status  : To get lxc status" % (argv[0]))
     print("%s list    : To get lxc list" % (argv[0]))
     print("%s console : To go to lxc console" % (argv[0]))
+    print("%s console : To go to lxc console" % (argv[0]))
+    print("%s reload  : To reload/restart lxc" % (argv[0]))
     print("-------------------------------------------------\n")
 
 def welcome():
@@ -82,12 +86,20 @@ def welcome():
     print("\tWelcome to %s box" % fbox_name)
     print("\tDefault user     : ubuntu")
     print("\tDefault password : ubuntu")
-    print("\t(ctr a-q to exit")
+    print("\t(ctr a-q to exit)")
     print("-------------------------------------------------\n")
 
-###########################################
-# Commands
-###########################################
+def provision():
+    print("\n-------------------------------------------------")
+    print("If its your first time,")
+    print("Please run the provision as below :")
+    print("ssh -t ubuntu@%s /home/ubuntu/fbox/provisions/finishinstall.sh" % int_cmd_getip())
+    print("Default password : ubuntu")
+    print("-------------------------------------------------\n")
+
+#############################################################################
+# commands
+#############################################################################
 
 def cmd_init():
     trace(sys._getframe().f_code.co_name)
@@ -113,13 +125,21 @@ def cmd_up():
     #############################################
     ################## Run ######################
     if cmd_status() == FBOXSTATUS.STOPPED:
+        int_cmd_mounts()
         int_cmd_run()
+        cmd_status()
+        provision()
 
 def cmd_halt():
     trace(sys._getframe().f_code.co_name)
     if cmd_status() == FBOXSTATUS.RUNNING:
         int_cmd_stop()
         cmd_status()
+
+def cmd_reload():
+    trace(sys._getframe().f_code.co_name)
+    cmd_halt()
+    cmd_up()
 
 def cmd_destroy():
     trace(sys._getframe().f_code.co_name)
@@ -146,6 +166,12 @@ def cmd_list(verbose=True):
 
 def cmd_status(verbose=True):
     trace(sys._getframe().f_code.co_name)
+
+    if not re.match(fbox_name, cmd_list(False)):
+        if verbose:
+            info("\n%s is UNKNOWN\n" % fbox_name)
+        return FBOXSTATUS.UNKNOWN
+
     cmd = [ "sudo", "lxc-info", "-n", fbox_name ]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     ret = p.wait()
@@ -159,9 +185,12 @@ def cmd_status(verbose=True):
             info("\n%s is RUNNING\n" % fbox_name)
         return FBOXSTATUS.RUNNING
 
-###########################################
+def cmd_remount():
+    int_cmd_mounts()
+
+#############################################################################
 # Internal commands
-###########################################
+#############################################################################
 
 def int_cmd_run():
     trace(sys._getframe().f_code.co_name)
@@ -211,10 +240,71 @@ def int_cmd_console():
         return 1
     return 0
 
+def int_cmd_mounts():
+    trace(sys._getframe().f_code.co_name)
+    configfile = os.path.join("/var/lib/lxc", fbox_name, "config")
+    if not os.path.isfile(configfile):
+        error("%s is not exist" % configfile)
+        return 1
 
-###########################################
+    #############################################
+    ############### Remove entry  ###############
+    start = -1
+    end = -1
+    for i, line in enumerate(open(configfile)):
+        if re.search("# start fbox entry", line):
+            start = i + 1
+        if re.search("# end fbox entry", line):
+            end = i + 1
+
+    if start >= 0 and end >= 0:
+        cmd = [ "sudo", "sed", "-i", '%s,%sd' % (start, end), configfile ]
+        if (execute(cmd, True) != 0):
+            error("Failed to execute cmd")
+            return 1
+
+    hasEntry = False
+    entry = "\"# start fbox entry\n"
+
+    #############################################
+    ############### Check all item ##############
+    for item in mounts:
+        log(item['host'])
+        host_dir = item['host']
+        target_dir = "/var/lib/lxc/%s/rootfs/%s" % (fbox_name, item['target'])
+        if not os.path.exists(host_dir):
+            error("Dir %s not exist" % host_dir)
+            continue
+        cmd = [ "sudo", "mkdir", "-p", target_dir ]
+        if (execute(cmd, True) != 0):
+            error("Failed to execute cmd")
+            continue
+        entry += "lxc.mount.entry = %s %s none defaults,bind 0 0\n" % (host_dir, target_dir)
+        hasEntry = True
+
+    #############################################
+    ############### Write to config #############
+    entry += "# end fbox entry\""
+    if hasEntry:
+        cmd = [ "sudo", "sh", "-c", "echo %s >> %s" % (entry, configfile) ]
+        if (execute(cmd, True) != 0):
+            error("Failed to execute cmd")
+            return 1
+
+def int_cmd_provision_puppet():
+    trace(sys._getframe().f_code.co_name)
+
+def int_cmd_getip():
+    trace(sys._getframe().f_code.co_name)
+    cmd = [ "dig", fbox_name, "@%s" % gateway, "+short" ]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    ret = p.wait()
+    output = p.communicate()
+    return output[0].strip()
+      
+#############################################################################
 # Helper
-###########################################
+#############################################################################
 
 def trace(caller):
     if DEBUG_TRACE:
@@ -301,16 +391,20 @@ def main(argv=sys.argv):
     ###########################################
     config = load_config(fboxfile)
 
-    print_config(config['container'])
+    print_config(config)
 
     global template
     global fbox_name
     global archi
     global revision
+    global mounts
+
     template = config['container']['template']
     fbox_name = config['container']['name']
     archi = config['container']['args']['archi']
     revision = config['container']['args']['revision']
+    mounts = config['mounts']
+    mounts.append({ 'host' : '%s' % dir['pwd'], 'target' : '/home/ubuntu/fbox' })
 
     ###########################################
     # Get command and execute
@@ -321,11 +415,5 @@ def main(argv=sys.argv):
         usage(argv)
         return -1
 
-
 if __name__ == "__main__":
     main()
-
-
-
-
-

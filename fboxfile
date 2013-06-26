@@ -1,9 +1,14 @@
 #Container
 
 container:
-  name: sopbox
+  name: sop
   template: ubuntu
   args:
     archi: 'amd64'
     revision: 'precise'
+
+mounts:
+- host:   '/home/phai/workspace/sop/sopbox'
+  target: '/home/ubuntu/sopbox'
+
 
