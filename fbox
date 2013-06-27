@@ -298,10 +298,9 @@ def int_cmd_getip():
     trace(sys._getframe().f_code.co_name)
     cmd = [ "dig", fbox_name, "@%s" % gateway, "+short" ]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    ret = p.wait()
     output = p.communicate()
     return output[0].strip()
-      
+
 #############################################################################
 # Helper
 #############################################################################
