@@ -8,7 +8,9 @@ container:
     revision: 'precise'
 
 mounts:
-- host:   '/home/phai/workspace/sop/sopbox'
+- host:   '/home/phai/workspace/sop/fbox_share'
   target: '/home/ubuntu/sopbox'
+- host:   '/home/phai/.ssh'
+  target: '/home/ubuntu/.ssh'
 
 
