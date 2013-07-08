@@ -8,16 +8,16 @@ class sop {
 
   notice('Installing all the necessaries ... ')
   notice('Please wait, it might takes a while ... ')
-  
+
   exec { "apt-get update":
     command => "/usr/bin/apt-get update"
   }
-  
+
   package { "wget":
     ensure => installed,
     require  => Exec['apt-get update'],
   }
-    
+
   package { "git":
     ensure => installed,
     require  => Exec['apt-get update'],
@@ -119,6 +119,15 @@ class sop {
     require  => Exec['apt-get update'],
   }
 
+  package { "xmlto":
+    ensure => installed,
+    require  => Exec['apt-get update'],
+  }
+
+  package { "gperf":
+    ensure => installed,
+    require  => Exec['apt-get update'],
+  }
 }
 
 include sop
