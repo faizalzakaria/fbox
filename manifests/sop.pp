@@ -128,6 +128,11 @@ class sop {
     ensure => installed,
     require  => Exec['apt-get update'],
   }
+
+  package { "cmake":
+    ensure => installed,
+    require  => Exec['apt-get update'],
+  }
 }
 
 include sop
