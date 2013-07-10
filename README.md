@@ -1,6 +1,8 @@
 fbox
 ====
 
+Modify the fboxfile so it matches to your need.
+
 Bring the box up :
 
 ./fbox up
