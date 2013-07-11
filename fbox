@@ -77,8 +77,8 @@ def usage(argv):
     print("%s status  : To get lxc status" % (argv[0]))
     print("%s list    : To get lxc list" % (argv[0]))
     print("%s console : To go to lxc console" % (argv[0]))
-    print("%s console : To go to lxc console" % (argv[0]))
     print("%s reload  : To reload/restart lxc" % (argv[0]))
+    print("%s ssh     : To go to ssh lxc" % (argv[0]))
     print("-------------------------------------------------\n")
 
 def welcome():
@@ -163,6 +163,10 @@ def cmd_list(verbose=True):
     if verbose:
         printc(output[0], yellow)
     return output[0]
+
+def cmd_ssh(verbose=True):
+    trace(sys._getframe().f_code.co_name)
+    os.execl("/bin/sh", "sh", "-c", "ssh ubuntu@%s" % int_cmd_getip())
 
 def cmd_status(verbose=True):
     trace(sys._getframe().f_code.co_name)
