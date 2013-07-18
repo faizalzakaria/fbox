@@ -20,6 +20,12 @@ Modify the ***fboxfile*** so it matches to your need.
 ./fbox reload
 ```
 
+### SSH the box :
+
+```
+./fbox ssh
+```
+
 ### Destroy the box :
 
 ```
