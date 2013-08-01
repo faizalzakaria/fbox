@@ -113,7 +113,7 @@ def cmd_up():
 
     #############################################
     ################ Create #####################
-    if not re.match(fbox_name, cmd_list(False)):
+    if not grep(cmd_list(False), fbox_name):
         cmd = [ "sudo", "lxc-create", "-t", template, "-n", fbox_name, "--" ]
         cmd.extend(['-a', archi, '-r', revision])
 
@@ -171,7 +171,7 @@ def cmd_ssh(verbose=True):
 def cmd_status(verbose=True):
     trace(sys._getframe().f_code.co_name)
 
-    if not re.match(fbox_name, cmd_list(False)):
+    if not grep(cmd_list(False), fbox_name):
         if verbose:
             info("\n%s is UNKNOWN\n" % fbox_name)
         return FBOXSTATUS.UNKNOWN
@@ -308,6 +308,12 @@ def int_cmd_getip():
 #############################################################################
 # Helper
 #############################################################################
+
+def grep(src, data):
+    for line in src.split("\n"):
+        if re.match(data, line):
+            return True
+    return False
 
 def trace(caller):
     if DEBUG_TRACE:
