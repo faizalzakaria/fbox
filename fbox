@@ -45,12 +45,6 @@ dir['pwd']    = os.getcwd()
 fboxfile      = os.path.join(dir['pwd'], fbox_filename)
 gateway       = "10.0.3.1"
 
-template  = ""
-fbox_name = ""
-archi     = ""
-revision  = ""
-mounts    = []
-
 DEBUG_TRACE = False
 
 ####################################################################

@@ -133,6 +133,21 @@ class sop {
     ensure => installed,
     require  => Exec['apt-get update'],
   }
+
+  package { "libssl-dev":
+    ensure => installed,
+    require  => Exec['apt-get update'],
+  }
+
+  package { "genromfs":
+    ensure => installed,
+    require  => Exec['apt-get update'],
+  }
+
+  package { "lib32ncurses5-dev":
+    ensure => installed,
+    require  => Exec['apt-get update'],
+  }
 }
 
 include sop
